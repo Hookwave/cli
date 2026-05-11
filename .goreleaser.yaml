@@ -1,0 +1,91 @@
+# goreleaser config — produces signed, checksum-bundled binaries for
+# darwin (arm64+amd64), linux, and windows on every git tag.
+#
+# Run locally without releasing:
+#   goreleaser release --snapshot --clean --skip publish
+#
+# Cut a release:
+#   git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+#   GITHUB_TOKEN=... goreleaser release --clean
+version: 2
+
+project_name: hookwave
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: hookwave
+    main: ./cmd/hookwave
+    binary: hookwave
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE*
+      - README*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Homebrew tap. Requires you to create a public repo at
+# github.com/hookwave/homebrew-tap before the first release works.
+brews:
+  - name: hookwave
+    repository:
+      owner: hookwave
+      name: homebrew-tap
+      branch: main
+    commit_author:
+      name: hookwave-bot
+      email: bot@hookwave.com
+    homepage: https://hookwave.com
+    description: Hookwave CLI — webhook gateway dev tools
+    license: MIT
+    install: |
+      bin.install "hookwave"
+    test: |
+      system "#{bin}/hookwave --version"
