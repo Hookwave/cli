@@ -18,13 +18,30 @@ import (
 	"github.com/hookwave/hookwave/apps/cli/internal/output"
 )
 
+// eventRow mirrors the API list response — additive so `events list --json`
+// doesn't silently drop fields the API returns. The table renderer in
+// `list` only reads the leading fields; downstream JSON consumers get
+// the full per-event picture (latency, retry schedule, fan-out targets).
 type eventRow struct {
-	ID         string    `json:"id"`
-	Status     string    `json:"status"`
-	Verified   bool      `json:"verified"`
-	SourceID   string    `json:"sourceId"`
-	SourceName string    `json:"sourceName"`
-	ReceivedAt time.Time `json:"receivedAt"`
+	ID                 string         `json:"id"`
+	Status             string         `json:"status"`
+	Verified           bool           `json:"verified"`
+	SourceID           string         `json:"sourceId"`
+	SourceName         string         `json:"sourceName"`
+	Provider           *string        `json:"provider,omitempty"`
+	ReceivedAt         time.Time      `json:"receivedAt"`
+	LastResponseStatus *int           `json:"lastResponseStatus,omitempty"`
+	LastDurationMs     *int           `json:"lastDurationMs,omitempty"`
+	NextAttemptAt      *time.Time     `json:"nextAttemptAt,omitempty"`
+	Connections        []eventConnRow `json:"connections,omitempty"`
+}
+
+type eventConnRow struct {
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Status        string     `json:"status"`
+	Attempts      int        `json:"attempts"`
+	NextAttemptAt *time.Time `json:"nextAttemptAt,omitempty"`
 }
 
 type eventsListResp struct {
@@ -81,7 +98,10 @@ func newEventsListCmd() *cobra.Command {
 				q.Set("status", status)
 			}
 			if sourceID != "" {
-				q.Set("sourceId", sourceID)
+				// API events route uses snake_case; the CLI flag is
+				// human-friendly camelCase. Previously this was silently
+				// dropped server-side and returned unfiltered events.
+				q.Set("source_id", sourceID)
 			}
 			path := "/v1/events"
 			if s := q.Encode(); s != "" {
@@ -148,7 +168,10 @@ func newEventsReplayCmd() *cobra.Command {
 				}
 				return runReplayWithEdit(cmd.Context(), a, c, args[0])
 			}
-			body := map[string]any{"eventIds": args}
+			// API expects snake_case event_ids; this was previously sent
+			// as eventIds and silently stripped by Zod, leading to a
+			// 200 response with zero events actually re-queued.
+			body := map[string]any{"event_ids": args}
 			var r replayResp
 			if err := c.Post(cmd.Context(), "/v1/events/replay", body, &r); err != nil {
 				return err

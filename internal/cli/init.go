@@ -25,7 +25,7 @@ import (
 //   • Bare line prompts (`--no-tui`, or non-TTY stdout) — kept so
 //     CI runners and dumb terminals still work.
 
-var supportedProviders = []string{"stripe", "shopify", "github", "replicate", "lemonsqueezy", "generic"}
+var supportedProviders = []string{"stripe", "shopify", "github", "replicate", "lemonsqueezy", "twilio", "generic"}
 var supportedHandlers = []string{"typescript", "javascript", "python", "go", "none"}
 
 // initInputs is the data both prompt paths produce. The actual create
@@ -129,7 +129,7 @@ Defaults to an interactive TUI when stdout is a real terminal. Pass
 		},
 	}
 	cmd.Flags().StringVar(&flagName, "name", "", "source name (skips prompt)")
-	cmd.Flags().StringVar(&flagProvider, "provider", "", "provider: stripe|shopify|github|replicate|lemonsqueezy|generic (skips prompt)")
+	cmd.Flags().StringVar(&flagProvider, "provider", "", "provider: stripe|shopify|github|replicate|lemonsqueezy|twilio|generic (skips prompt). Schedule sources are dashboard-only.")
 	cmd.Flags().IntVar(&flagPort, "port", 0, "local port (skips prompt)")
 	cmd.Flags().StringVar(&flagHandler, "handler", "", "starter handler language: typescript|javascript|python|go|none")
 	cmd.Flags().BoolVar(&flagForce, "force", false, "overwrite existing files without prompting")

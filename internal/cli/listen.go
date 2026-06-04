@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/hookwave/hookwave/apps/cli/internal/output"
 	"github.com/hookwave/hookwave/apps/cli/internal/tui"
@@ -41,11 +43,24 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a := appFrom(cmd)
 			if _, err := a.authedClient(); err != nil {
-				return err
+				// Wrap so the user sees a single clear line. Without this
+				// they got "" on a stale CLI token because cobra was
+				// printing nothing recognisable.
+				return fmt.Errorf("hookwave listen: %w (try `hookwave login` to refresh credentials)", err)
 			}
 			localURL, err := normalizeLocalTarget(args[0], host)
 			if err != nil {
 				return err
+			}
+
+			// Auto-fall-back to plain log mode when stdout isn't a real
+			// TTY. Bubble Tea's alt-screen renderer silently bails when
+			// it can't take over the terminal — which is why the user saw
+			// `listen` exit with no output before this guard existed.
+			if !noTUI && !term.IsTerminal(int(os.Stdout.Fd())) {
+				a.stderr.Println(output.Warn,
+					"→ stdout is not a TTY; falling back to --no-tui plain log mode.")
+				noTUI = true
 			}
 
 			tok, _ := readToken()
@@ -85,9 +100,14 @@ Examples:
 
 			authed, err := a.authedClient()
 			if err != nil {
-				return err
+				return fmt.Errorf("hookwave listen: %w", err)
 			}
-			return tui.Run(cmd.Context(), tui.Options{
+			// Surface a notice on stderr before the TUI takes over the
+			// screen. If the TUI fails to render for any reason the user
+			// at least sees this instead of a silent return to prompt.
+			a.stderr.Printf(output.Muted,
+				"→ Forwarding to %s. Press q or Ctrl-C to exit the TUI.\n", localURL)
+			if err := tui.Run(cmd.Context(), tui.Options{
 				LocalURL:     localURL,
 				TunnelOpts:   opts,
 				ActiveOrg:    a.cfg.ActiveOrg,
@@ -95,7 +115,10 @@ Examples:
 				CLIVersion:   a.build.Version,
 				API:          authed,
 				DashboardURL: dashboardURLFromAPI(a.cfg.ResolvedAPIBase()),
-			})
+			}); err != nil {
+				return fmt.Errorf("hookwave listen: tui exited: %w", err)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringSliceVar(&sources, "source", nil, "limit to one or more source ids (repeatable, comma-separated)")

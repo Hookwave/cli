@@ -13,8 +13,10 @@ import (
 	"github.com/hookwave/hookwave/apps/cli/internal/output"
 )
 
-// CLI surface over /v1/sources. `init` already covers create — these
-// fill the gap for list/get/update/delete + lifecycle (pause/unpause).
+// CLI surface over /v1/sources. `init` scaffolds a starter handler
+// directory; `create` is the explicit non-scaffolding way to mint a
+// new source from the terminal (CI scripts, scripted provisioning,
+// power users who don't want a directory scaffolded).
 
 type sourceRow struct {
 	ID        string    `json:"id"`
@@ -37,11 +39,64 @@ func newSourcesCmd() *cobra.Command {
 	cmd.AddCommand(
 		newSourcesListCmd(),
 		newSourcesGetCmd(),
+		newSourcesCreateCmd(),
 		newSourcesUpdateCmd(),
 		newSourcesDeleteCmd(),
 		newSourcesPauseCmd(),
 		newSourcesUnpauseCmd(),
 	)
+	return cmd
+}
+
+func newSourcesCreateCmd() *cobra.Command {
+	var (
+		name     string
+		provider string
+		jsonOut  bool
+	)
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create an inbound webhook source",
+		Long: `Create a new source. Returns the source row including the ingest
+URL you paste into the provider's webhook configuration.
+
+Examples:
+  hookwave sources create --name prod-stripe --provider stripe
+  hookwave sources create --name my-svc --provider generic --json | jq '.ingestUrl'`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a := appFrom(cmd)
+			if name == "" {
+				return errors.New("--name is required")
+			}
+			if provider == "" {
+				return errors.New("--provider is required (one of: stripe, shopify, github, replicate, lemonsqueezy, twilio, generic, schedule)")
+			}
+			c, err := a.authedClient()
+			if err != nil {
+				return err
+			}
+			body := map[string]any{"name": name, "provider": provider}
+			var r struct {
+				Data map[string]any `json:"data"`
+			}
+			if err := c.Post(cmd.Context(), "/v1/sources", body, &r); err != nil {
+				return err
+			}
+			if jsonOut {
+				return printJSON(a.stdout, r.Data)
+			}
+			id, _ := r.Data["id"].(string)
+			ingestURL, _ := r.Data["ingestUrl"].(string)
+			a.stdout.Printf(output.Success, "✓ Created source %s (%s)\n", id, name)
+			if ingestURL != "" {
+				a.stdout.Printf(output.None, "  ingest: %s\n", ingestURL)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "", "human-readable source name (required)")
+	cmd.Flags().StringVar(&provider, "provider", "", "provider verifier: stripe|shopify|github|replicate|lemonsqueezy|twilio|generic|schedule (required)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the created source row as JSON")
 	return cmd
 }
 

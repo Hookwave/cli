@@ -19,7 +19,7 @@
 //
 // Tool surface is intentionally narrow: heavy on read tools (the AI
 // is mostly *answering questions*) and one carefully-scoped write
-// tool (replay_event). CRUD-style writes (create/update/delete) are
+// tool (replay_event) plus two creates. Updates/deletes are
 // deliberately *not* exposed — those should be explicit human
 // actions, not LLM-driven side effects.
 package mcp
@@ -54,16 +54,27 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	s.AddTool(
 		mcpgo.NewTool("hookwave_whoami",
 			mcpgo.WithDescription("Returns the currently-authenticated user, org, plan, and feature limits."),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolWhoami(c),
 	)
 
 	s.AddTool(
 		mcpgo.NewTool("hookwave_list_events",
-			mcpgo.WithDescription("List recent events. Filter by status (queued|delivering|delivered|failed|dropped) or sourceId."),
-			mcpgo.WithString("status", mcpgo.Description("Optional status filter")),
+			mcpgo.WithDescription("List recent events. Filter by status (queued|delivering|delivered|failed|dropped) or sourceId (UUID of a source in your org)."),
+			mcpgo.WithString("status",
+				mcpgo.Description("Optional status filter"),
+				mcpgo.Enum("queued", "delivering", "delivered", "failed", "dropped"),
+			),
 			mcpgo.WithString("sourceId", mcpgo.Description("Optional source UUID")),
-			mcpgo.WithNumber("limit", mcpgo.Description("Max rows (default 25, max 200)")),
+			mcpgo.WithNumber("limit",
+				mcpgo.Description("Max rows (default 25, max 200)"),
+				mcpgo.Min(1),
+				mcpgo.Max(200),
+			),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolListEvents(c),
 	)
@@ -72,14 +83,18 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 		mcpgo.NewTool("hookwave_get_event",
 			mcpgo.WithDescription("Fetch full event detail including delivery attempts and per-connection status."),
 			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Event UUID")),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolGetEvent(c),
 	)
 
 	s.AddTool(
 		mcpgo.NewTool("hookwave_doctor",
-			mcpgo.WithDescription("Diagnose why an event failed. Returns ranked likely causes (signing mismatch, timeout, DNS, payload size, rate limit, etc.) with concrete suggestions."),
+			mcpgo.WithDescription("Diagnose why an event failed. Fetches the event plus delivery attempts and surfaces a hint string based on the failure pattern. Read-only — no retries or mutations triggered."),
 			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Event UUID to diagnose")),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolDoctor(c),
 	)
@@ -88,6 +103,15 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 		mcpgo.NewTool("hookwave_replay_event",
 			mcpgo.WithDescription("Re-queue an event for delivery. The event must be in a terminal state (delivered, failed, dropped) — not queued/delivering. The original source (Stripe, GitHub, etc.) is NOT re-triggered; the stored event is replayed."),
 			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Event UUID")),
+			// The one true mutation in the MCP surface: re-queues
+			// delivery attempts. Idempotent in the sense that the same
+			// event can be replayed repeatedly without corruption, but
+			// each call WILL produce new delivery attempts and POST to
+			// the destination — so we leave destructiveHint on so AI
+			// clients prompt for approval.
+			mcpgo.WithReadOnlyHintAnnotation(false),
+			mcpgo.WithDestructiveHintAnnotation(true),
+			mcpgo.WithIdempotentHintAnnotation(false),
 		),
 		toolReplayEvent(c),
 	)
@@ -95,6 +119,8 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	s.AddTool(
 		mcpgo.NewTool("hookwave_list_sources",
 			mcpgo.WithDescription("List inbound webhook sources (Stripe, GitHub, etc.) configured in the active org."),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolListResource(c, "/v1/sources"),
 	)
@@ -102,6 +128,8 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	s.AddTool(
 		mcpgo.NewTool("hookwave_list_destinations",
 			mcpgo.WithDescription("List outbound delivery targets (HTTP, Slack, Discord, etc.) in the active org."),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolListResource(c, "/v1/destinations"),
 	)
@@ -109,6 +137,8 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	s.AddTool(
 		mcpgo.NewTool("hookwave_list_connections",
 			mcpgo.WithDescription("List connections — the Source → Destination wiring with filters / transformations."),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolListResource(c, "/v1/connections"),
 	)
@@ -116,6 +146,8 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	s.AddTool(
 		mcpgo.NewTool("hookwave_list_issues",
 			mcpgo.WithDescription("List open / triaging / resolved issues. Issues are auto-grouped delivery problems (consecutive failures, source silent, schema drift, etc.)."),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolListResource(c, "/v1/issues"),
 	)
@@ -124,6 +156,8 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 		mcpgo.NewTool("hookwave_get_issue",
 			mcpgo.WithDescription("Fetch full issue detail: status, severity, description, comments, linked events, resolution notes, acknowledgement state."),
 			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Issue UUID")),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolGetIssue(c),
 	)
@@ -138,10 +172,12 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 			mcpgo.WithString("name", mcpgo.Required(), mcpgo.Description("Human-readable name; must be unique in the org.")),
 			mcpgo.WithString("destinationType",
 				mcpgo.Required(),
-				mcpgo.Description("One of: http, n8n, make, slack, discord, mock"),
-				mcpgo.Enum("http", "n8n", "make", "slack", "discord", "mock"),
+				mcpgo.Description("Destination type. http/n8n/make/slack/teams/discord need an https URL; telegram needs a Bot API sendMessage URL; email needs an address; klaviyo needs https; mock/cli/s3/twilio/postgres derive their target from typed config and ignore destinationUrl."),
+				mcpgo.Enum("http", "n8n", "make", "slack", "teams", "discord", "telegram", "email", "klaviyo", "cli", "s3", "twilio", "postgres", "mock"),
 			),
-			mcpgo.WithString("destinationUrl", mcpgo.Description("Required unless destinationType=mock; the URL events POST to.")),
+			mcpgo.WithString("destinationUrl", mcpgo.Description("Required for http/n8n/make/slack/teams/discord/telegram/email/klaviyo. Ignored for mock/cli/s3/twilio/postgres (those use typed config).")),
+			mcpgo.WithReadOnlyHintAnnotation(false),
+			mcpgo.WithDestructiveHintAnnotation(true),
 		),
 		toolCreateDestination(c),
 	)
@@ -152,6 +188,8 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 			mcpgo.WithString("name", mcpgo.Required(), mcpgo.Description("Human-readable name for this connection.")),
 			mcpgo.WithString("sourceId", mcpgo.Required(), mcpgo.Description("UUID of the source.")),
 			mcpgo.WithString("destinationId", mcpgo.Required(), mcpgo.Description("UUID of the destination.")),
+			mcpgo.WithReadOnlyHintAnnotation(false),
+			mcpgo.WithDestructiveHintAnnotation(true),
 		),
 		toolCreateConnection(c),
 	)
@@ -177,7 +215,12 @@ func toolListEvents(c *httpc.Client) server.ToolHandlerFunc {
 			q.Set("status", v)
 		}
 		if v, ok := args["sourceId"].(string); ok && v != "" {
-			q.Set("sourceId", v)
+			// API events route uses snake_case query params; the MCP
+			// tool keeps camelCase for its public interface. Translate
+			// here. Previously this was silently dropped — the API
+			// would ignore the unknown `sourceId` key and return
+			// unfiltered events with no error. (Caught in docs round 2.)
+			q.Set("source_id", v)
 		}
 		if v, ok := args["limit"].(float64); ok && v > 0 {
 			q.Set("limit", fmt.Sprintf("%d", int(v)))
@@ -242,7 +285,7 @@ func toolReplayEvent(c *httpc.Client) server.ToolHandlerFunc {
 			return mcpgo.NewToolResultError(err.Error()), nil
 		}
 		var r map[string]any
-		if err := c.Post(ctx, "/v1/events/replay", map[string]any{"eventIds": []string{id}}, &r); err != nil {
+		if err := c.Post(ctx, "/v1/events/replay", map[string]any{"event_ids": []string{id}}, &r); err != nil {
 			return mcpgo.NewToolResultError(err.Error()), nil
 		}
 		return mcpgo.NewToolResultText("Replayed event " + id + ". " + jsonString(r)), nil

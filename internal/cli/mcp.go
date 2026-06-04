@@ -29,7 +29,7 @@ func newMCPCmd() *cobra.Command {
 		Long: `Starts an MCP server over stdio, exposing Hookwave operations as
 tools that AI assistants can call.
 
-Tools (read):
+Tools (read — readOnlyHint=true):
   hookwave_whoami
   hookwave_list_events       (filter: status, sourceId, limit)
   hookwave_get_event         (id)
@@ -38,12 +38,15 @@ Tools (read):
   hookwave_list_destinations
   hookwave_list_connections
   hookwave_list_issues
+  hookwave_get_issue         (id)
 
-Tools (action):
-  hookwave_replay_event      (id)  — re-queue without re-triggering source
+Tools (write — destructiveHint=true, AI clients prompt for approval):
+  hookwave_replay_event      (id)             — re-queue without re-triggering source
+  hookwave_create_destination (name,type,url) — create outbound delivery target
+  hookwave_create_connection  (name,src,dst)  — wire source → destination
 
-CRUD-style writes (create/update/delete) are intentionally NOT exposed
-to the AI. Use the regular CLI for those.`,
+Updates and deletes are intentionally NOT exposed to the AI. Use the
+regular CLI for those.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a := appFrom(cmd)
 			c, err := a.authedClient()
