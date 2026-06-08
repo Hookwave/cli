@@ -13,8 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/httpc"
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
+	"github.com/hookwave/cli/internal/httpc"
+	"github.com/hookwave/cli/internal/output"
 )
 
 type bodyDownloadResp struct {

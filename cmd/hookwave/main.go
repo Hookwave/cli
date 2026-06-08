@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/cli"
-	"github.com/hookwave/hookwave/apps/cli/internal/httpc"
+	"github.com/hookwave/cli/internal/cli"
+	"github.com/hookwave/cli/internal/httpc"
 )
 
 // Build-time injected via -ldflags. Defaults are placeholders for `go run`.

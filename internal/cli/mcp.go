@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/mcp"
+	"github.com/hookwave/cli/internal/mcp"
 )
 
 // `hookwave mcp` runs an MCP (Model Context Protocol) server over

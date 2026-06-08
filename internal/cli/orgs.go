@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/config"
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
+	"github.com/hookwave/cli/internal/config"
+	"github.com/hookwave/cli/internal/output"
 )
 
 type orgsListResp struct {

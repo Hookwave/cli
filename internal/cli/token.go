@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/hookwave/hookwave/apps/cli/internal/auth"
+import "github.com/hookwave/cli/internal/auth"
 
 // tokenFromAuth is a thin pass-through used by listen so its file
 // stays small. Errors are surfaced; callers swallow ErrNoToken because

@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/auth"
-	"github.com/hookwave/hookwave/apps/cli/internal/config"
-	"github.com/hookwave/hookwave/apps/cli/internal/httpc"
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
+	"github.com/hookwave/cli/internal/auth"
+	"github.com/hookwave/cli/internal/config"
+	"github.com/hookwave/cli/internal/httpc"
+	"github.com/hookwave/cli/internal/output"
 )
 
 // OAuth 2.0 Device Authorization Grant (RFC 8628). The CLI starts a

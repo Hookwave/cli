@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
+	"github.com/hookwave/cli/internal/output"
 )
 
 func newConfigCmd() *cobra.Command {

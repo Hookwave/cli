@@ -1,0 +1,44 @@
+# Release the Hookwave CLI via goreleaser on tag push.
+#
+# Tag a release: `git tag v0.1.0 && git push origin v0.1.0`. Goreleaser:
+#   1. Cross-compiles darwin/linux/windows binaries (amd64+arm64)
+#   2. Uploads them as a GitHub Release on THIS repo (public, so Homebrew
+#      can anon-download them — no 404 like the private monorepo).
+#   3. Updates Formula/hookwave.rb in Hookwave/homebrew-cli with the
+#      new version + SHA-256 of every tarball.
+#
+# Repo secret required: HOMEBREW_TAP_TOKEN
+#   A fine-grained PAT with `Contents: Read and write` on
+#   Hookwave/homebrew-cli (the formula push target).
+#   The default GITHUB_TOKEN handles the release on THIS repo.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

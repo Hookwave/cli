@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
+	"github.com/hookwave/cli/internal/output"
 )
 
 // promptReader is a tiny stdin wrapper for the init flow. We avoid

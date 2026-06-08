@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
-	"github.com/hookwave/hookwave/apps/cli/internal/tui"
-	"github.com/hookwave/hookwave/apps/cli/internal/tunnel"
+	"github.com/hookwave/cli/internal/output"
+	"github.com/hookwave/cli/internal/tui"
+	"github.com/hookwave/cli/internal/tunnel"
 )
 
 func newListenCmd() *cobra.Command {

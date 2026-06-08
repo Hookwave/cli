@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/httpc"
-	"github.com/hookwave/hookwave/apps/cli/internal/output"
+	"github.com/hookwave/cli/internal/httpc"
+	"github.com/hookwave/cli/internal/output"
 )
 
 // `hookwave init` — interactive scaffolding. Creates a source, writes

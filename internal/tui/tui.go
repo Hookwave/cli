@@ -13,8 +13,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/httpc"
-	"github.com/hookwave/hookwave/apps/cli/internal/tunnel"
+	"github.com/hookwave/cli/internal/httpc"
+	"github.com/hookwave/cli/internal/tunnel"
 )
 
 // Options are passed in by the listen command.

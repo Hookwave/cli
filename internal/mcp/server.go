@@ -34,7 +34,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/httpc"
+	"github.com/hookwave/cli/internal/httpc"
 )
 
 // Run starts the MCP server over stdio. Returns when stdin closes

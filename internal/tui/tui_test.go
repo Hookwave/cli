@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/hookwave/hookwave/apps/cli/internal/tunnel"
+	"github.com/hookwave/cli/internal/tunnel"
 )
 
 func TestMatchesFilter(t *testing.T) {

@@ -71,16 +71,11 @@ changelog:
       - "^test:"
       - "^chore:"
 
-# The main repo (Hookwave/Hookwave) is private — Homebrew can't
-# anonymously download release artifacts from a private GitHub repo
-# (you get a 404 on every binary URL). Publish releases into the
-# public Hookwave/homebrew-cli tap repo instead. The tap holds both
-# the Formula AND the binary tarballs, so the formula URLs resolve
-# without auth.
+# Release lands on this repo (Hookwave/cli) — public, so Homebrew can
+# anonymously download release artifacts without 404. Goreleaser's
+# default is to publish to the repo it ran in, so no cross-repo
+# configuration is needed.
 release:
-  github:
-    owner: Hookwave
-    name: homebrew-cli
   name_template: "CLI {{ .Tag }}"
   header: |
     Hookwave CLI release.

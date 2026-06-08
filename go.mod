@@ -1,4 +1,4 @@
-module github.com/hookwave/hookwave/apps/cli
+module github.com/hookwave/cli
 
 go 1.26.3
 
