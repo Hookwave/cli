@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultAPIBase is the production API URL. Override via $HOOKWAVE_API.
-const DefaultAPIBase = "https://api.hookwave.com"
+const DefaultAPIBase = "https://api.hookwave.dev"
 
 // Config is the shape persisted to disk. New fields must be optional
 // to preserve backward compatibility with older configs.

@@ -57,7 +57,7 @@ type outbound struct {
 
 // Options control the tunnel behaviour.
 type Options struct {
-	// APIBase like "https://api.hookwave.com".
+	// APIBase like "https://api.hookwave.dev".
 	APIBase string
 	// Bearer token from internal/auth.
 	Token string

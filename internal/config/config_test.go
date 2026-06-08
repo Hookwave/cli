@@ -43,6 +43,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 }
 
 func TestResolvedAPIBase(t *testing.T) {
+	// Ensure the developer's shell env doesn't leak in and shadow the
+	// default. Setenv with "" temporarily clears it for this test.
+	t.Setenv("HOOKWAVE_API", "")
 	c := &Config{}
 	if got := c.ResolvedAPIBase(); got != DefaultAPIBase {
 		t.Fatalf("default: got %q want %q", got, DefaultAPIBase)
