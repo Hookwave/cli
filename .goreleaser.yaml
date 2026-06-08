@@ -71,6 +71,24 @@ changelog:
       - "^test:"
       - "^chore:"
 
+# The main repo (Hookwave/Hookwave) is private — Homebrew can't
+# anonymously download release artifacts from a private GitHub repo
+# (you get a 404 on every binary URL). Publish releases into the
+# public Hookwave/homebrew-cli tap repo instead. The tap holds both
+# the Formula AND the binary tarballs, so the formula URLs resolve
+# without auth.
+release:
+  github:
+    owner: Hookwave
+    name: homebrew-cli
+  name_template: "CLI {{ .Tag }}"
+  header: |
+    Hookwave CLI release.
+
+    ```sh
+    brew install hookwave/cli/hookwave
+    ```
+
 # Homebrew tap. Publishes Formula/hookwave.rb into
 # github.com/Hookwave/homebrew-cli on every release so
 # `brew install hookwave/cli/hookwave` resolves to the new version.
