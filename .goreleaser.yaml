@@ -71,19 +71,27 @@ changelog:
       - "^test:"
       - "^chore:"
 
-# Homebrew tap. Requires you to create a public repo at
-# github.com/hookwave/homebrew-tap before the first release works.
+# Homebrew tap. Publishes Formula/hookwave.rb into
+# github.com/Hookwave/homebrew-cli on every release so
+# `brew install hookwave/cli/hookwave` resolves to the new version.
+#
+# Requires the release workflow to provide HOMEBREW_TAP_TOKEN — a PAT
+# with `repo` scope on the Hookwave org (the default GITHUB_TOKEN can't
+# write to a different repo, hence the dedicated token).
 brews:
   - name: hookwave
     repository:
-      owner: hookwave
-      name: homebrew-tap
+      owner: Hookwave
+      name: homebrew-cli
       branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
     commit_author:
-      name: hookwave-bot
-      email: bot@hookwave.com
-    homepage: https://hookwave.com
-    description: Hookwave CLI — webhook gateway dev tools
+      name: hookwave-releaser
+      email: noreply@hookwave.dev
+    commit_msg_template: "chore: hookwave {{ .Tag }}"
+    homepage: https://hookwave.dev
+    description: Hookwave CLI — reliable webhook infrastructure for AI agents
     license: MIT
     install: |
       bin.install "hookwave"
