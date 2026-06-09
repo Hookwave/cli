@@ -44,11 +44,64 @@ func Run(ctx context.Context, c *httpc.Client, version string) error {
 		"hookwave",
 		version,
 		server.WithToolCapabilities(true),
+		server.WithInstructions(serverInstructions),
 	)
 
 	registerTools(s, c)
 	return server.ServeStdio(s)
 }
+
+// serverInstructions is surfaced to the AI client at session init and
+// describes the Hookwave data model + common foot-guns so the AI stops
+// reasoning from generic webhook/messaging-API priors. Keep it tight —
+// long primers get truncated by some clients and dilute attention.
+const serverInstructions = `Hookwave is a webhook router. The data model:
+
+  source  →  connection  →  destination
+  (inbound)     (rules + format)   (outbound)
+
+A SOURCE is an ingest URL that accepts webhooks. The provider
+(stripe/github/whatsapp/generic/...) only changes signature verification.
+
+A DESTINATION is where events leave Hookwave. CRITICAL: typed destinations
+(twilio, whatsapp, postgres, s3) carry their full delivery config on the
+destination row at creation time — Twilio destinations store from/to/channel
+in twilioConfig, S3 stores bucket/region/key-template, Postgres stores
+host/database/table. Events do NOT and SHOULD NOT carry per-event recipient
+info for these types. If a user asks for a script that emits to a Twilio
+destination, do NOT include a "to" field in the event payload — the worker
+reads twilioConfig.to from the destination, not the event.
+
+A CONNECTION links one source to one destination. The connection owns the
+outbound format template (Jinja-like, references event.payload.* fields)
+and retry rules. To know what fields an outbound message will contain, you
+need the connection's format template — NOT just the event payload shape.
+
+How an event flows:
+  1. App POSTs JSON to source.ingestUrl  →  Hookwave stores it as an event
+  2. Worker finds matching connections    →  applies the connection's filter rules
+  3. For each match: connection template renders the outbound body  →  worker
+     calls the destination's typed delivery handler (HTTP POST, Twilio API,
+     S3 PUT, Postgres INSERT, etc.) using destination-row config
+
+Practical guidance when generating SDK / script code for the user:
+
+  • Before writing code that sends to a destination, call
+    hookwave_get_destination to inspect its config. Don't invent fields.
+  • If the user has no connection or the connection's format template is
+    raw passthrough, the destination receives the literal JSON payload.
+    Recommend they set a format template (Format tab on the connection)
+    if their downstream expects a specific shape.
+  • For Twilio/WhatsApp/SMS: event body just needs the message text
+    (typically as {"body": "..."} matching the template). No recipient,
+    no auth token, no Twilio SID in the event.
+  • For HTTP destinations with bearer/api-key auth: auth is on the
+    destination, not the event. Don't re-pass credentials per event.
+
+Write tools (create_source / create_destination / create_connection /
+generate_source_key) ARE write tools — they prompt the user for approval
+per the MCP destructive-hint contract. Use them when the user explicitly
+asks to "set up" or "create"; don't auto-fire them mid-explanation.`
 
 func registerTools(s *server.MCPServer, c *httpc.Client) {
 	s.AddTool(
@@ -87,6 +140,36 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 			mcpgo.WithDestructiveHintAnnotation(false),
 		),
 		toolGetEvent(c),
+	)
+
+	s.AddTool(
+		mcpgo.NewTool("hookwave_get_source",
+			mcpgo.WithDescription("Fetch full source detail including provider, ingestUrl, verification settings, rate limits, and schedule config. Use this BEFORE generating any code that emits events into a source — the ingestUrl and any allowedMethods restriction matter."),
+			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Source UUID")),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
+		),
+		toolGetByPath(c, "/v1/sources/"),
+	)
+
+	s.AddTool(
+		mcpgo.NewTool("hookwave_get_destination",
+			mcpgo.WithDescription("Fetch full destination detail including destinationType, destinationUrl, and typed config (twilioConfig.to/from, s3Config.bucket, postgresConfig.host, whatsappConfig.recipientId, etc.). ALWAYS call this before writing code that emits to a destination so the AI knows what's already baked in (e.g. don't pass `to` in the event payload when twilioConfig.to is already set)."),
+			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Destination UUID")),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
+		),
+		toolGetByPath(c, "/v1/destinations/"),
+	)
+
+	s.AddTool(
+		mcpgo.NewTool("hookwave_get_connection",
+			mcpgo.WithDescription("Fetch full connection detail including filter rules, retry policy, and outbound format template. The format template determines what fields the destination actually receives — generic event payloads are rewritten by this template before delivery. Useful when writing event-emitting code, because the user's downstream system (Slack message, Twilio body, etc.) sees the rendered template, not the raw event."),
+			mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("Connection UUID")),
+			mcpgo.WithReadOnlyHintAnnotation(true),
+			mcpgo.WithDestructiveHintAnnotation(false),
+		),
+		toolGetByPath(c, "/v1/connections/"),
 	)
 
 	s.AddTool(
@@ -284,6 +367,24 @@ func toolListEvents(c *httpc.Client) server.ToolHandlerFunc {
 		}
 		var r map[string]any
 		if err := c.Get(ctx, path, &r); err != nil {
+			return mcpgo.NewToolResultError(err.Error()), nil
+		}
+		return mcpgo.NewToolResultText(jsonString(r)), nil
+	}
+}
+
+// toolGetByPath returns a generic GET-by-id handler that calls
+// {pathPrefix}{id} and returns the raw JSON to the AI. Used for the
+// per-resource detail tools (sources/destinations/connections) that
+// just proxy to the API — they have no logic beyond "fetch and return".
+func toolGetByPath(c *httpc.Client, pathPrefix string) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		id, err := requiredString(req, "id")
+		if err != nil {
+			return mcpgo.NewToolResultError(err.Error()), nil
+		}
+		var r map[string]any
+		if err := c.Get(ctx, pathPrefix+url.PathEscape(id), &r); err != nil {
 			return mcpgo.NewToolResultError(err.Error()), nil
 		}
 		return mcpgo.NewToolResultText(jsonString(r)), nil
