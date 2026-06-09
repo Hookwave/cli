@@ -60,8 +60,17 @@ const serverInstructions = `Hookwave is a webhook router. The data model:
   source  →  connection  →  destination
   (inbound)     (rules + format)   (outbound)
 
-A SOURCE is an ingest URL that accepts webhooks. The provider
-(stripe/github/whatsapp/generic/...) only changes signature verification.
+A SOURCE accepts events. The provider drives auth:
+
+  • stripe / shopify / github / replicate / lemonsqueezy / twilio:
+    public ingest URL, signature-verified per provider.
+  • generic: public ingest URL, no signature.
+  • schedule: internal cron-triggered, no HTTP ingest.
+  • code: SDK-ONLY. Public ingest URL is REJECTED. Events must arrive
+    via /v1/ingest/batch with a Bearer src_live_… token issued from the
+    source's SDK Keys section. Always pick this when the user is emitting
+    events from their own code/SDK. It's the secure default for outbound
+    SDK traffic — leaked ingest URLs can't trigger destinations.
 
 A DESTINATION is where events leave Hookwave. CRITICAL: typed destinations
 (twilio, whatsapp, postgres, s3) carry their full delivery config on the
@@ -86,6 +95,11 @@ How an event flows:
 
 Practical guidance when generating SDK / script code for the user:
 
+  • If the user wants to emit events from their own application,
+    create the source with provider=code FIRST, then call
+    hookwave_generate_source_key to mint an SDK key. The key is shown
+    ONCE — paste it into the user's .env. Plain webhook ingest URLs
+    don't apply: code sources reject anonymous POSTs.
   • Before writing code that sends to a destination, call
     hookwave_get_destination to inspect its config. Don't invent fields.
   • If the user has no connection or the connection's format template is
@@ -251,12 +265,12 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	// updates and deletes stay CLI-only.
 	s.AddTool(
 		mcpgo.NewTool("hookwave_create_source",
-			mcpgo.WithDescription("Create an inbound webhook source. Provider sets signature verification rules: stripe/shopify/github/replicate/lemonsqueezy/twilio expect that provider's signing scheme; generic accepts any payload. For scheduled triggers use 'schedule' and pass scheduleCron (recurring) or scheduleNextFireAt (one-off ISO timestamp)."),
+			mcpgo.WithDescription("Create an inbound source. Provider sets the auth model: stripe/shopify/github/replicate/lemonsqueezy/twilio = public ingest URL + provider HMAC; generic = public ingest URL, no signature; schedule = internal cron, no HTTP; code = SDK-ONLY, public URL rejected (use this for ANY user-owned code emitting events — paired with hookwave_generate_source_key for auth)."),
 			mcpgo.WithString("name", mcpgo.Required(), mcpgo.Description("Human-readable name; must be unique in the org.")),
 			mcpgo.WithString("provider",
 				mcpgo.Required(),
-				mcpgo.Description("Inbound provider. Determines signature verification."),
-				mcpgo.Enum("stripe", "shopify", "github", "replicate", "lemonsqueezy", "twilio", "generic", "schedule"),
+				mcpgo.Description("Source provider. Pick 'code' for SDK-emitted events from the user's own application — it's the secure default. Pick the matching brand (stripe/github/...) for webhook providers. Pick 'generic' only when no signature verification is desired AND a public URL is acceptable. Pick 'schedule' for cron-triggered sources."),
+				mcpgo.Enum("stripe", "shopify", "github", "replicate", "lemonsqueezy", "twilio", "generic", "schedule", "code"),
 			),
 			mcpgo.WithString("scheduleCron", mcpgo.Description("Cron expression for recurring schedule sources, e.g. '0 9 * * *'. Required for provider=schedule unless scheduleNextFireAt is set.")),
 			mcpgo.WithString("scheduleNextFireAt", mcpgo.Description("ISO-8601 timestamp for a one-off fire. Alternative to scheduleCron for provider=schedule.")),
@@ -300,7 +314,7 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	// end-to-end without the user leaving their editor.
 	s.AddTool(
 		mcpgo.NewTool("hookwave_sdk_install",
-			mcpgo.WithDescription("Return install command + minimal example code for the official Hookwave SDK in the requested language. Read-only documentation tool — does not mutate any state. Use this when the user asks to emit events from their code, push events from a server-side handler, or 'connect my app to Hookwave'."),
+			mcpgo.WithDescription("Return install command + minimal example code for the official Hookwave SDK in the requested language. Read-only documentation tool — does not mutate any state. Use this when the user asks to emit events from their code, push events from a server-side handler, or 'connect my app to Hookwave'. The example code expects a `code`-provider source plus an SDK key (src_live_…) — create the source via hookwave_create_source(provider='code') and the key via hookwave_generate_source_key BEFORE handing this example to the user, otherwise it won't authenticate."),
 			mcpgo.WithString("language",
 				mcpgo.Required(),
 				mcpgo.Description("Target language. 'node' covers Node.js + TypeScript; 'python' covers CPython 3.9+."),
@@ -314,7 +328,7 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 
 	s.AddTool(
 		mcpgo.NewTool("hookwave_generate_source_key",
-			mcpgo.WithDescription("Mint a write-only SDK key for a source. The raw key is returned ONCE in the response — paste it into the user's code or .env. Use this after hookwave_create_destination + hookwave_create_connection so the user's app can emit events. Defaults to 'test' environment (excluded from billing); only use 'live' when the user explicitly asks for production."),
+			mcpgo.WithDescription("Mint a write-only SDK key for a source. The raw key is returned ONCE in the response — paste it into the user's code or .env. Required for `code` sources (their only ingest path is /v1/ingest/batch with this key). Use after hookwave_create_source(provider='code') and the destination + connection are wired. Defaults to 'test' environment (excluded from billing); only use 'live' when the user explicitly asks for production."),
 			mcpgo.WithString("sourceId", mcpgo.Required(), mcpgo.Description("UUID of the source the key authenticates against.")),
 			mcpgo.WithString("environment",
 				mcpgo.Description("Key environment. 'test' = excluded from billing, tagged in the dashboard (default + recommended). 'live' = counts against the org's monthly quota."),
