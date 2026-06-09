@@ -328,11 +328,11 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 
 	s.AddTool(
 		mcpgo.NewTool("hookwave_generate_source_key",
-			mcpgo.WithDescription("Mint a write-only SDK key for a source. The raw key is returned ONCE in the response — paste it into the user's code or .env. Required for `code` sources (their only ingest path is /v1/ingest/batch with this key). Use after hookwave_create_source(provider='code') and the destination + connection are wired. Defaults to 'test' environment (excluded from billing); only use 'live' when the user explicitly asks for production."),
+			mcpgo.WithDescription("Mint a write-only SDK key for a source. The raw key is returned ONCE in the response — paste it into the user's code or .env. Required for `code` sources (their only ingest path is /v1/ingest/batch with this key). Use after hookwave_create_source(provider='code') and the destination + connection are wired. The `environment` field is a label only: 'live' (default) and 'test' both count against the org's monthly quota — there is no billing exemption. Pick 'test' purely to tag dev/staging keys for dashboard filtering."),
 			mcpgo.WithString("sourceId", mcpgo.Required(), mcpgo.Description("UUID of the source the key authenticates against.")),
 			mcpgo.WithString("environment",
-				mcpgo.Description("Key environment. 'test' = excluded from billing, tagged in the dashboard (default + recommended). 'live' = counts against the org's monthly quota."),
-				mcpgo.Enum("test", "live"),
+				mcpgo.Description("Label only — 'live' (default) and 'test' both count against the monthly quota. Use 'test' to tag dev/staging keys for dashboard filtering; use 'live' for production. Recommend 'live' by default and only switch to 'test' when the user explicitly says the key is for dev/staging."),
+				mcpgo.Enum("live", "test"),
 			),
 			mcpgo.WithString("name", mcpgo.Description("Optional human label so the user can disambiguate this key in the dashboard. Example: 'prod web server', 'local dev'.")),
 			// Creates persistent state (a credential), so destructive hint
