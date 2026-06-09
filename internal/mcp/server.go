@@ -167,6 +167,23 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	// hallucination blast radius is bounded. We expose creates only;
 	// updates and deletes stay CLI-only.
 	s.AddTool(
+		mcpgo.NewTool("hookwave_create_source",
+			mcpgo.WithDescription("Create an inbound webhook source. Provider sets signature verification rules: stripe/shopify/github/replicate/lemonsqueezy/twilio expect that provider's signing scheme; generic accepts any payload. For scheduled triggers use 'schedule' and pass scheduleCron (recurring) or scheduleNextFireAt (one-off ISO timestamp)."),
+			mcpgo.WithString("name", mcpgo.Required(), mcpgo.Description("Human-readable name; must be unique in the org.")),
+			mcpgo.WithString("provider",
+				mcpgo.Required(),
+				mcpgo.Description("Inbound provider. Determines signature verification."),
+				mcpgo.Enum("stripe", "shopify", "github", "replicate", "lemonsqueezy", "twilio", "generic", "schedule"),
+			),
+			mcpgo.WithString("scheduleCron", mcpgo.Description("Cron expression for recurring schedule sources, e.g. '0 9 * * *'. Required for provider=schedule unless scheduleNextFireAt is set.")),
+			mcpgo.WithString("scheduleNextFireAt", mcpgo.Description("ISO-8601 timestamp for a one-off fire. Alternative to scheduleCron for provider=schedule.")),
+			mcpgo.WithReadOnlyHintAnnotation(false),
+			mcpgo.WithDestructiveHintAnnotation(true),
+		),
+		toolCreateSource(c),
+	)
+
+	s.AddTool(
 		mcpgo.NewTool("hookwave_create_destination",
 			mcpgo.WithDescription("Create an outbound delivery target. Type http needs a URL; type mock is for testing."),
 			mcpgo.WithString("name", mcpgo.Required(), mcpgo.Description("Human-readable name; must be unique in the org.")),
@@ -339,6 +356,42 @@ func toolGetIssue(c *httpc.Client) server.ToolHandlerFunc {
 			return mcpgo.NewToolResultError(err.Error()), nil
 		}
 		return mcpgo.NewToolResultText(jsonString(r)), nil
+	}
+}
+
+func toolCreateSource(c *httpc.Client) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		name, err := requiredString(req, "name")
+		if err != nil {
+			return mcpgo.NewToolResultError(err.Error()), nil
+		}
+		provider, err := requiredString(req, "provider")
+		if err != nil {
+			return mcpgo.NewToolResultError(err.Error()), nil
+		}
+		body := map[string]any{"name": name, "provider": provider}
+		args := req.GetArguments()
+		if v, ok := args["scheduleCron"].(string); ok && v != "" {
+			body["scheduleCron"] = v
+		}
+		if v, ok := args["scheduleNextFireAt"].(string); ok && v != "" {
+			body["scheduleNextFireAt"] = v
+		}
+		// Server enforces the (cron || nextFireAt) requirement for schedule
+		// sources via a zod refine. Mirror it here so the AI gets a clearer
+		// message than a generic 400 + Zod path.
+		if provider == "schedule" {
+			_, hasCron := body["scheduleCron"]
+			_, hasFire := body["scheduleNextFireAt"]
+			if !hasCron && !hasFire {
+				return mcpgo.NewToolResultError("schedule sources need scheduleCron (recurring) or scheduleNextFireAt (one-off)"), nil
+			}
+		}
+		var r map[string]any
+		if err := c.Post(ctx, "/v1/sources", body, &r); err != nil {
+			return mcpgo.NewToolResultError(err.Error()), nil
+		}
+		return mcpgo.NewToolResultText("Created source. " + jsonString(r)), nil
 	}
 }
 
