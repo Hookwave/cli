@@ -309,7 +309,7 @@ func registerTools(s *server.MCPServer, c *httpc.Client) {
 	)
 
 	// SDK tools — let AI clients install and use the official Hookwave
-	// SDKs (@hookwave/sdk for Node, hookwave for Python) so a prompt
+	// SDKs (hookwave-sdk for Node, hookwave for Python) so a prompt
 	// like "wire this Python app to WhatsApp via Hookwave" can resolve
 	// end-to-end without the user leaving their editor.
 	s.AddTool(
@@ -641,9 +641,9 @@ func toolGenerateSourceKey(c *httpc.Client) server.ToolHandlerFunc {
 
 const nodeSDKInstructions = "# Hookwave SDK — Node.js\n\n" +
 	"Install (choose your package manager):\n\n" +
-	"```sh\nnpm install @hookwave/sdk\n# or\npnpm add @hookwave/sdk\n# or\nyarn add @hookwave/sdk\n```\n\n" +
+	"```sh\nnpm install hookwave-sdk\n# or\npnpm add hookwave-sdk\n# or\nyarn add hookwave-sdk\n```\n\n" +
 	"Minimal usage:\n\n" +
-	"```ts\nimport { Hookwave } from \"@hookwave/sdk\";\n\n" +
+	"```ts\nimport { Hookwave } from \"hookwave-sdk\";\n\n" +
 	"const hw = new Hookwave({\n" +
 	"  sourceKey: process.env.HOOKWAVE_SOURCE_KEY!, // src_live_… or src_test_…\n" +
 	"});\n\n" +
